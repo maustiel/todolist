@@ -1,22 +1,22 @@
 <script setup>
-import { ref } from 'vue'
 
+import { ref, computed, watch } from 'vue'
 
+const CLE_LOCALSTORAGE_TACHES = 'todolist:taches_v3'
+const CLE_LOCALSTORAGE_PROCHAIN_ID = 'todolist:prochainId_v3'
 
-const taches = ref ([
-  {id: 1, libelle: "apprendre vue.js", terminee: false, ordre: 1},
-  {id: 2, libelle: "faire mes exercices", terminee: false, ordre:2},
-  {id:3, libelle: "créer la todolist", terminee: false, ordre:3}
+// --- DONNÉES DE BASE ---
+const taches = ref([
+  { id: 1, libelle: "Apprendre Vue.js", terminee: false, ordre: 1 },
+  { id: 2, libelle: "Faire les exercices", terminee: false, ordre: 2 },
+  { id: 3, libelle: "Créer la todolist", terminee: false, ordre: 3 }
 ])
 
 const nouvelleTache = ref('')
-const prochainId = ref(4)
 const triCritere = ref('manuel')
+const prochainId = ref(4)
 
-const CLE_LOCALSTORAGE_TACHES = 'todolist:taches_v2'
-const CLE_LOCALSTORAGE_PROCHAIN_ID = 'todolist:prochainId_v2'
-
-
+// --- LECTURE INITIALE DU LOCALSTORAGE ---
 const tachesEnregistrees = localStorage.getItem(CLE_LOCALSTORAGE_TACHES)
 const prochainIdEnregistre = localStorage.getItem(CLE_LOCALSTORAGE_PROCHAIN_ID)
 
@@ -27,10 +27,55 @@ if (prochainIdEnregistre) {
   prochainId.value = parseInt(prochainIdEnregistre)
 }
 
-function enregistrerTaches() {
-  localStorage.setItem(CLE_LOCALSTORAGE_TACHES, JSON.stringify(taches.value))
-  localStorage.setItem(CLE_LOCALSTORAGE_PROCHAIN_ID, prochainId.value.toString())
-}
+// --- 🪄 LES OBSERVATEURS (WATCHERS) ---
+
+// Premier observateur : Surveille le tableau "taches"
+watch(taches, (nouvellesTaches) => {
+  // Cette fonction se déclenche toute seule dès qu'une tâche est ajoutée, modifiée ou supprimée !
+  localStorage.setItem(CLE_LOCALSTORAGE_TACHES, JSON.stringify(nouvellesTaches))
+}, { deep: true }) // deep: true est OBLIGATOIRE avec ref([]) pour détecter les changements à l'intérieur des objets du tableau
+
+// Second observateur : Surveille le compteur "prochainId"
+watch(prochainId, (nouvelleValeur) => {
+  // Se déclenche tout seul quand prochainId augmente
+  localStorage.setItem(CLE_LOCALSTORAGE_PROCHAIN_ID, String(nouvelleValeur))
+})
+
+// --- PROPRIÉTÉS CALCULÉES ---
+const nombreTotalTaches = computed(() => taches.value.length)
+const nombreTachesTerminees = computed(() => taches.value.filter(t => t.terminee).length)
+const aDesTaches = computed(() => taches.value.length > 0)
+const peutUtiliserTriManuel = computed(() => triCritere.value === 'manuel')
+
+const tachesTriees = computed(() => {
+  const copie = [...taches.value]
+  
+  if (triCritere.value === 'manuel') {
+    return copie.sort((a, b) => a.ordre - b.ordre)
+  } 
+  else if (triCritere.value === 'creation') {
+    return copie.sort((a, b) => a.id - b.id)
+  } 
+  else if (triCritere.value === 'libelleAsc') {
+    return copie.sort((a, b) => a.libelle.localeCompare(b.libelle))
+  } 
+  else if (triCritere.value === 'libelleDesc') {
+    return copie.sort((a, b) => b.libelle.localeCompare(a.libelle))
+  } 
+  else if (triCritere.value === 'terminee') {
+    return copie.sort((a, b) => {
+      if (a.terminee === b.terminee) {
+        return a.libelle.localeCompare(b.libelle)
+      }
+      return a.terminee ? 1 : -1
+    })
+  }
+  return copie
+})
+
+// --- FONCTIONS D'ACTIONS (Maintenant beaucoup plus propres !) ---
+// Remarque : Il n'y a plus AUCUN appel à la sauvegarde manuelle ici. 
+// Les fonctions font juste leur travail métier (ajouter, supprimer...), et les "watch" s'occupent du reste.
 
 function ajouterTache() {
   taches.value.push({
@@ -39,80 +84,49 @@ function ajouterTache() {
     terminee: false,
     ordre: prochainId.value
   })
-
-  prochaineId.value++
+  
+  prochainId.value++
   nouvelleTache.value = ''
-
-  appliquerTri()
-  enregistrerTaches()
 }
-
 
 function basculerTerminee(id) {
-  const tache = taches.value.find(t => t.id ===id)
+  const tache = taches.value.find(t => t.id === id)
   if (tache) {
     tache.terminee = !tache.terminee
-    enregistrerTaches()
-}
+  }
 }
 
 function supprimerTache(id) {
   taches.value = taches.value.filter(t => t.id !== id)
-  enregistrerTaches()
-}
-
-function appliquerTri() {
- if (triCritere.value === 'manuel') {
-  taches.value.sort((a, b) => a.ordre - b.ordre)
-  } else if (triCritere.value === 'creation') {
-    taches.value.sort((a, b) => a.id - b.id)
-  } else if (triCritere.value === 'libelleAsc') {
-    taches.value.sort((a, b) => a.libelle.localeCompare(b.libelle))
- }
- else if (triCritere.value === 'libelleDesc') {
-    taches.value.sort((a, b) => b.libelle.localeCompare(a.libelle))
-  }
-  else if (triCritere.value === 'terminee') {
-    taches.value.sort((a, b) => {
-      if (a.terminee === b.terminee) {
-        return a.libelle.localeCompare(b.libelle)
-      }
-      return a.terminee ? 1 : -1
-    })
-}
 }
 
 function monter(id) {
-  if (triCritere.value !== 'manuel') 
-  return
-
-const index = taches.value.findIndex(t=> t.id === id)
-
-if(index > 0) {
-  const ordreTemp = taches.value[index].ordre
-    taches.value[index].ordre = taches.value[index - 1].ordre
-    taches.value[index - 1].ordre = ordreTemp
-
-    appliquerTri()
-    enregistrerTaches()
+  if (!peutUtiliserTriManuel.value) return
+  
+  const indexVisuel = tachesTriees.value.findIndex(t => t.id === id)
+  
+  if (indexVisuel > 0) {
+    const tacheActuelle = tachesTriees.value[indexVisuel]
+    const tacheAuDessus = tachesTriees.value[indexVisuel - 1]
+    
+    const ordreTemp = tacheActuelle.ordre
+    tacheActuelle.ordre = tacheAuDessus.ordre
+    tacheAuDessus.ordre = ordreTemp
+  }
 }
-}
-
 
 function descendre(id) {
-  if (triCritere.value !== 'manuel') return
-
-  const index = taches.value.findIndex(t => t.id === id)
+  if (!peutUtiliserTriManuel.value) return
   
- 
-  if (index !== -1 && index < taches.value.length - 1) {
+  const indexVisuel = tachesTriees.value.findIndex(t => t.id === id)
+  
+  if (indexVisuel !== -1 && indexVisuel < tachesTriees.value.length - 1) {
+    const tacheActuelle = tachesTriees.value[indexVisuel]
+    const tacheEnDessous = tachesTriees.value[indexVisuel + 1]
     
-    const ordreTemp = taches.value[index].ordre
-    taches.value[index].ordre = taches.value[index + 1].ordre
-    taches.value[index + 1].ordre = ordreTemp
-    
-    appliquerTri()
-    enregistrerTaches()
+    const ordreTemp = tacheActuelle.ordre
+    tacheActuelle.ordre = tacheEnDessous.ordre
+    tacheEnDessous.ordre = ordreTemp
   }
 }
 </script>
@@ -127,44 +141,50 @@ function descendre(id) {
     <!-- Les compteurs sous forme de mini-tags pastel -->
     <div class="compteurs">
       <span class="tag tag-blue">{{ taches.length }} Total</span>
-      <span class="tag tag-green">{{ taches.filter(t => t.terminee).length }} Terminées</span>
+      <span class="tag tag-green"
+        >{{ taches.filter((t) => t.terminee).length }} Terminées</span
+      >
     </div>
 
     <!-- Formulaire d'ajout épuré -->
     <div class="ajout-tache">
-      <input 
-        type="text" 
-        v-model="nouvelleTache" 
+      <input
+        type="text"
+        v-model="nouvelleTache"
         placeholder="Ajouter une nouvelle tâche..."
+      />
+      <button
+        class="btn-ajouter"
+        @click="ajouterTache"
+        :disabled="!nouvelleTache"
       >
-      <button class="btn-ajouter" @click="ajouterTache" :disabled="!nouvelleTache">
         +
       </button>
     </div>
 
     <!-- Bloc de tri avec la phrase d'information restaurée -->
     <div class="bloc-tri">
-      <select v-model="triCritere" @change="appliquerTri">
+     <select v-model="triCritere">
         <option value="manuel">Ordre personnalisé</option>
         <option value="creation">Ordre de création</option>
         <option value="libelleAsc">Libellé A→Z</option>
         <option value="libelleDesc">Libellé Z→A</option>
         <option value="terminee">Non terminées d'abord</option>
       </select>
-      
+
       <p class="info-tri">
-        Les flèches ⬆ et ⬇ ne fonctionnent que si le tri est sur "Ordre personnalisé".
+        Les flèches ⬆ et ⬇ ne fonctionnent que si le tri est sur "Ordre
+        personnalisé".
       </p>
     </div>
 
     <!-- La liste des tâches -->
-    <ul v-if="taches.length > 0" class="liste-taches">
-      <li v-for="tache in taches" :key="tache.id" class="item-tache">
-        
+    <ul v-if="aDesTaches" class="liste-taches">
+     <li v-for="tache in tachesTriees" :key="tache.id" class="item-tache">
         <!-- Case à cocher arrondie à gauche -->
-        <button 
-          class="checkbox-ronde" 
-          :class="{ 'cochee': tache.terminee }" 
+        <button
+          class="checkbox-ronde"
+          :class="{ cochee: tache.terminee }"
           @click="basculerTerminee(tache.id)"
         >
           <span v-if="tache.terminee">✓</span>
@@ -177,25 +197,45 @@ function descendre(id) {
 
         <!-- Les actions discrètes à droite -->
         <div class="actions">
-          <button class="btn-icon" @click="monter(tache.id)" :disabled="triCritere !== 'manuel'">↑</button>
-          <button class="btn-icon" @click="descendre(tache.id)" :disabled="triCritere !== 'manuel'">↓</button>
-          <button class="btn-icon btn-supprimer" @click="supprimerTache(tache.id)">✕</button>
+          <!-- On désactive (!) le bouton si on NE peut PAS utiliser le tri manuel -->
+          <button
+            class="btn-icon"
+            @click="monter(tache.id)"
+            :disabled="!peutUtiliserTriManuel"
+          >
+            ↑
+          </button>
+          <button
+            class="btn-icon"
+            @click="descendre(tache.id)"
+            :disabled="!peutUtiliserTriManuel"
+          >
+            ↓
+          </button>
+
+          <button
+            class="btn-icon btn-supprimer"
+            @click="supprimerTache(tache.id)"
+          >
+            ✕
+          </button>
         </div>
-        
       </li>
     </ul>
 
     <p v-else class="message-vide">Vous n'avez aucune tâche en cours.</p>
   </div>
+
+  
 </template>
 
 <style scoped>
 /* Typographie globale moderne */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 
 /* Conteneur simulant un écran mobile */
 .app-mobile {
-  font-family: 'Inter', sans-serif;
+  font-family: "Inter", sans-serif;
   max-width: 420px;
   margin: 40px auto;
   background-color: #ffffff;
@@ -224,8 +264,14 @@ function descendre(id) {
   font-size: 0.85rem;
   font-weight: 600;
 }
-.tag-blue { background-color: #eef2ff; color: #5c7cfa; }
-.tag-green { background-color: #ebfbee; color: #40c057; }
+.tag-blue {
+  background-color: #eef2ff;
+  color: #5c7cfa;
+}
+.tag-green {
+  background-color: #ebfbee;
+  color: #40c057;
+}
 
 /* Formulaire d'ajout sans bordure dure */
 .ajout-tache {
@@ -243,7 +289,9 @@ function descendre(id) {
   outline: none;
   transition: background 0.2s;
 }
-.ajout-tache input:focus { background-color: #f1f3f5; }
+.ajout-tache input:focus {
+  background-color: #f1f3f5;
+}
 
 .btn-ajouter {
   background-color: #000;
@@ -255,8 +303,13 @@ function descendre(id) {
   cursor: pointer;
   transition: transform 0.2s;
 }
-.btn-ajouter:disabled { background-color: #e9ecef; cursor: not-allowed; }
-.btn-ajouter:not(:disabled):hover { transform: scale(1.05); }
+.btn-ajouter:disabled {
+  background-color: #e9ecef;
+  cursor: not-allowed;
+}
+.btn-ajouter:not(:disabled):hover {
+  transform: scale(1.05);
+}
 
 /* Sélecteur de tri minimaliste */
 .bloc-tri select {
@@ -292,7 +345,9 @@ function descendre(id) {
   padding: 15px 0;
   border-bottom: 1px solid #f8f9fa;
 }
-.item-tache:last-child { border-bottom: none; }
+.item-tache:last-child {
+  border-bottom: none;
+}
 
 /* Case à cocher (bouton rond carré) */
 .checkbox-ronde {
@@ -348,10 +403,19 @@ function descendre(id) {
   padding: 5px;
   border-radius: 6px;
 }
-.btn-icon:hover:not(:disabled) { background-color: #f1f3f5; color: #212529; }
-.btn-icon:disabled { opacity: 0.3; cursor: default; }
+.btn-icon:hover:not(:disabled) {
+  background-color: #f1f3f5;
+  color: #212529;
+}
+.btn-icon:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
 
-.btn-supprimer:hover { background-color: #ffe3e3 !important; color: #fa5252 !important; }
+.btn-supprimer:hover {
+  background-color: #ffe3e3 !important;
+  color: #fa5252 !important;
+}
 
 /* Message vide */
 .message-vide {
