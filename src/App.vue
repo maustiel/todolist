@@ -1,59 +1,40 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref } from 'vue'
 
-// composants enfants 
+// --- IMPORT DES COMPOSANTS ---
 import TodoForm from './components/TodoForm.vue'
 import TodoList from './components/TodoList.vue'
 
-const CLE_LOCALSTORAGE_TACHES = 'todolist:taches_v3'
-const CLE_LOCALSTORAGE_PROCHAIN_ID = 'todolist:prochainId_v3'
+// --- IMPORT DES COMPOSABLES ---
+import { useLocalStorage } from './composables/useLocalStorage.js'
+import { useTodolistStats } from './composables/useTodolistStats.js'
+import { useTodolistTri } from './composables/useTodolistTri.js'
 
-// --- DONNÉES ---
+// --- DONNÉES DE BASE ---
 const taches = ref([
   { id: 1, libelle: "Apprendre Vue.js", terminee: false, ordre: 1 },
   { id: 2, libelle: "Faire les exercices", terminee: false, ordre: 2 },
   { id: 3, libelle: "Créer la todolist", terminee: false, ordre: 3 }
 ])
-
-const triCritere = ref('manuel')
 const prochainId = ref(4)
+const triCritere = ref('manuel')
 
-const tachesEnregistrees = localStorage.getItem(CLE_LOCALSTORAGE_TACHES)
-const prochainIdEnregistre = localStorage.getItem(CLE_LOCALSTORAGE_PROCHAIN_ID)
+// --- 1. PERSISTANCE (Magique !) ---
+// Ces deux simples lignes remplacent TOUTE ton ancienne logique de sauvegarde
+useLocalStorage('todolist:taches_v4', taches)
+useLocalStorage('todolist:prochainId_v4', prochainId)
 
-if (tachesEnregistrees) { taches.value = JSON.parse(tachesEnregistrees) }
-if (prochainIdEnregistre) { prochainId.value = parseInt(prochainIdEnregistre) }
+// --- 2. STATISTIQUES ---
+// On récupère nos calculs depuis le composable
+const { nombreTotalTaches, nombreTachesTerminees, aDesTaches } = useTodolistStats(taches)
 
-// --- WATCHERS ---
-watch(taches, (nouvellesTaches) => {
-  localStorage.setItem(CLE_LOCALSTORAGE_TACHES, JSON.stringify(nouvellesTaches))
-}, { deep: true })
+// --- 3. TRI ---
+// On récupère notre liste triée depuis le composable
+const { peutUtiliserTriManuel, tachesTriees } = useTodolistTri(taches, triCritere)
 
-watch(prochainId, (nouvelleValeur) => {
-  localStorage.setItem(CLE_LOCALSTORAGE_PROCHAIN_ID, String(nouvelleValeur))
-})
+const afficherFormulaire = ref(true)
 
-// --- PROPRIÉTÉS CALCULÉES ---
-const nombreTotalTaches = computed(() => taches.value.length)
-const nombreTachesTerminees = computed(() => taches.value.filter(t => t.terminee).length)
-const peutUtiliserTriManuel = computed(() => triCritere.value === 'manuel')
-
-const tachesTriees = computed(() => {
-  const copie = [...taches.value]
-  if (triCritere.value === 'manuel') return copie.sort((a, b) => a.ordre - b.ordre)
-  if (triCritere.value === 'creation') return copie.sort((a, b) => a.id - b.id)
-  if (triCritere.value === 'libelleAsc') return copie.sort((a, b) => a.libelle.localeCompare(b.libelle))
-  if (triCritere.value === 'libelleDesc') return copie.sort((a, b) => b.libelle.localeCompare(a.libelle))
-  if (triCritere.value === 'terminee') {
-    return copie.sort((a, b) => {
-      if (a.terminee === b.terminee) return a.libelle.localeCompare(b.libelle)
-      return a.terminee ? 1 : -1
-    })
-  }
-  return copie
-})
-
-// --- FONCTIONS MÉTIER ---
+// --- FONCTIONS MÉTIER (Actions utilisateur) ---
 function ajouterTache(texte) {
   taches.value.push({
     id: prochainId.value,
@@ -77,11 +58,11 @@ function monter(id) {
   if (!peutUtiliserTriManuel.value) return
   const indexVisuel = tachesTriees.value.findIndex(t => t.id === id)
   if (indexVisuel > 0) {
-    const tacheActuelle = tachesTriees.value[indexVisuel]
-    const tacheAuDessus = tachesTriees.value[indexVisuel - 1]
-    const ordreTemp = tacheActuelle.ordre
-    tacheActuelle.ordre = tacheAuDessus.ordre
-    tacheAuDessus.ordre = ordreTemp
+    const act = tachesTriees.value[indexVisuel]
+    const dest = tachesTriees.value[indexVisuel - 1]
+    const temp = act.ordre
+    act.ordre = dest.ordre
+    dest.ordre = temp
   }
 }
 
@@ -89,11 +70,11 @@ function descendre(id) {
   if (!peutUtiliserTriManuel.value) return
   const indexVisuel = tachesTriees.value.findIndex(t => t.id === id)
   if (indexVisuel !== -1 && indexVisuel < tachesTriees.value.length - 1) {
-    const tacheActuelle = tachesTriees.value[indexVisuel]
-    const tacheEnDessous = tachesTriees.value[indexVisuel + 1]
-    const ordreTemp = tacheActuelle.ordre
-    tacheActuelle.ordre = tacheEnDessous.ordre
-    tacheEnDessous.ordre = ordreTemp
+    const act = tachesTriees.value[indexVisuel]
+    const dest = tachesTriees.value[indexVisuel + 1]
+    const temp = act.ordre
+    act.ordre = dest.ordre
+    dest.ordre = temp
   }
 }
 </script>
@@ -109,8 +90,14 @@ function descendre(id) {
       <span class="tag tag-green">{{ nombreTachesTerminees }} Terminées</span>
     </div>
 
-    <!-- On utilise notre nouveau composant Formulaire -->
-    <TodoForm @demanderAjoutTache="ajouterTache" />
+    <button class="btn-toggle" @click="afficherFormulaire = !afficherFormulaire">
+  {{ afficherFormulaire ? 'Masquer le formulaire' : 'Afficher le formulaire' }}
+</button>
+
+<TodoForm 
+  v-if="afficherFormulaire" 
+  @demanderAjoutTache="ajouterTache" 
+/>
 
     <div class="bloc-tri">
       <select v-model="triCritere">
@@ -120,11 +107,12 @@ function descendre(id) {
         <option value="libelleDesc">Libellé Z→A</option>
         <option value="terminee">Non terminées d'abord</option>
       </select>
-      <p class="info-tri">ℹ️ Les flèches ⬆ et ⬇ ne fonctionnent que si le tri est sur "Ordre personnalisé".</p>
+      <p class="info-tri">Les flèches ⬆ et ⬇ ne fonctionnent que si le tri est sur "Ordre personnalisé".</p>
     </div>
 
-    <!-- On utilise notre nouveau composant Liste -->
+    <!-- On n'affiche la liste que si on a des tâches -->
     <TodoList 
+      v-if="aDesTaches"
       :taches="tachesTriees" 
       :peutUtiliserTriManuel="peutUtiliserTriManuel"
       @demanderChangementStatut="basculerTerminee"
@@ -132,27 +120,24 @@ function descendre(id) {
       @demanderDescendre="descendre"
       @demanderSuppression="supprimerTache"
     />
+    <p v-else class="message-vide">Vous n'avez aucune tâche en cours.</p>
   </div>
 </template>
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-/* On ne garde ici QUE le CSS global de l'application */
 .app-mobile {
   font-family: 'Inter', sans-serif;
   max-width: 420px; margin: 40px auto;
   background-color: #ffffff; border-radius: 30px;
   padding: 30px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
 }
-
 .header h1 { font-size: 2rem; font-weight: 700; color: #000; margin-bottom: 20px; }
-
 .compteurs { display: flex; gap: 10px; margin-bottom: 25px; }
 .tag { padding: 8px 14px; border-radius: 12px; font-size: 0.85rem; font-weight: 600; }
 .tag-blue { background-color: #eef2ff; color: #5c7cfa; }
 .tag-green { background-color: #ebfbee; color: #40c057; }
-
 .bloc-tri select {
   width: 100%; padding: 12px 15px; border-radius: 12px;
   border: 1px solid #f1f3f5; background-color: #fff;
@@ -160,4 +145,19 @@ function descendre(id) {
   margin-bottom: 10px; cursor: pointer;
 }
 .info-tri { font-size: 0.8rem; color: #adb5bd; margin: 0 0 20px 5px; font-weight: 500; }
+.message-vide { text-align: center; color: #adb5bd; margin-top: 40px; font-weight: 500; }
+
+.btn-toggle {
+  width: 100%;
+  background-color: #f1f3f5;
+  border: none;
+  padding: 10px;
+  border-radius: 12px;
+  margin-bottom: 15px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #495057;
+  transition: background 0.2s;
+}
+.btn-toggle:hover { background-color: #e9ecef; }
 </style>
