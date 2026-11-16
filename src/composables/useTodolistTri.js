@@ -1,4 +1,4 @@
-// src/composables/useTodolistTri.js
+
 import { computed } from 'vue'
 
 export function useTodolistTri(taches, triCritere) {
@@ -31,7 +31,7 @@ export function useTodolistTri(taches, triCritere) {
     return copie
   })
 
-  // On renvoie les deux variables dont App.vue aura besoin
+  
   return {
     peutUtiliserTriManuel,
     tachesTriees

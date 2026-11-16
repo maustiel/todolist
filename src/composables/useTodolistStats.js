@@ -1,4 +1,4 @@
-// src/composables/useTodolistStats.js
+
 import { computed } from 'vue'
 
 export function useTodolistStats(taches) {
@@ -11,7 +11,7 @@ export function useTodolistStats(taches) {
   
   const aDesTaches = computed(() => taches.value.length > 0)
 
-  // On renvoie un objet avec nos 3 calculs pour pouvoir les utiliser dans App.vue
+  
   return {
     nombreTotalTaches,
     nombreTachesTerminees,

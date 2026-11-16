@@ -1,17 +1,17 @@
 <script setup>
-import TodoItem from './TodoItem.vue'
+import TodoItem from "./TodoItem.vue";
 
 const props = defineProps({
   taches: { type: Array, required: true },
-  peutUtiliserTriManuel: { type: Boolean, required: true }
-})
+  peutUtiliserTriManuel: { type: Boolean, required: true },
+});
 
 const emit = defineEmits([
-  'demanderChangementStatut',
-  'demanderMonter',
-  'demanderDescendre',
-  'demanderSuppression'
-])
+  "demanderChangementStatut",
+  "demanderMonter",
+  "demanderDescendre",
+  "demanderSuppression",
+]);
 </script>
 
 <template>
